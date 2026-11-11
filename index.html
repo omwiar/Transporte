@@ -33,6 +33,8 @@
   --track:#2a3442; color-scheme:dark }
 
 *{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45}
 .wrap{max-width:1180px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:20px}
 h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;line-height:1.15}
@@ -53,7 +55,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px}
 form{display:flex;flex-direction:column;gap:14px}
 label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:500;color:var(--muted)}
-input[type=number],select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;min-width:0}
+input[type=number],input[type=text],input[type=tel],select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;min-width:0}
 .dims{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .check{flex-direction:row;align-items:center;gap:8px;color:var(--ink);font-size:14px}
 .hint{font-size:12px;color:var(--muted);margin:0}
@@ -97,6 +99,20 @@ td.r,th.r{text-align:right}
 .prov{display:flex;flex-direction:column;gap:8px}
 .kv{display:grid;grid-template-columns:90px minmax(0,1fr);gap:4px 10px;font-size:13px;margin:0}
 .kv dt{color:var(--muted)} .kv dd{margin:0}
+.btn{font:inherit;font-weight:600;font-size:13px;padding:7px 14px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.sm{padding:4px 10px;font-size:12px}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+.contact .btn{margin-top:8px}
+#cot{border-color:var(--accent)}
+.qgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:14px 0}
+.qtot{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:0 0 14px;padding:12px;background:var(--bg);border-radius:6px}
+.qtot dt{font-size:12px;color:var(--muted)}
+.qtot dd{margin:0;font-weight:600;font-size:16px}
+.qtot dd.big{font-family:var(--display);font-size:22px;color:var(--accent)}
+.neg{color:var(--bad)}
+.actions{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+input:disabled{opacity:.5}
 </style>
 
 <div class="wrap">
@@ -110,6 +126,8 @@ td.r,th.r{text-align:right}
       <a href="#buscar">Buscar</a>
       <a href="#flota">Flota</a>
       <a href="#proveedores">Proveedores</a>
+      <a href="#clientes">Clientes</a>
+      <a href="#cotizaciones">Cotizaciones</a>
     </nav>
   </header>
 
@@ -149,7 +167,7 @@ td.r,th.r{text-align:right}
         <label class="check" for="rampa"><input id="rampa" type="checkbox"> Necesita rampa hidráulica</label>
       </form>
     </div>
-    <div class="results" id="res"></div>
+    <div class="results"><div id="cot" class="panel" hidden></div><div class="results" id="res"></div></div>
   </section>
 
   <section id="v-flota" hidden>
@@ -165,6 +183,28 @@ td.r,th.r{text-align:right}
 
   <section id="v-proveedores" hidden>
     <div class="provs" id="provs"></div>
+  </section>
+
+  <section id="v-clientes" class="search" hidden>
+    <div class="panel">
+      <form id="fc">
+        <h2 id="fct">Nuevo cliente</h2>
+        <label for="c-razon">Razón social<input id="c-razon" type="text" required></label>
+        <label for="c-nit">NIT<input id="c-nit" type="text" placeholder="0614-010190-101-3"></label>
+        <label for="c-nrc">Número de registro (NRC)<input id="c-nrc" type="text" placeholder="123456-7"></label>
+        <label for="c-tel">Teléfono<input id="c-tel" type="tel"></label>
+        <label for="c-contacto">Persona de contacto<input id="c-contacto" type="text"></label>
+        <label class="check" for="c-credito"><input id="c-credito" type="checkbox"> Tiene crédito</label>
+        <label for="c-dias">Días de crédito<input id="c-dias" type="number" min="0" step="1" value="0" disabled></label>
+        <div class="actions"><button class="btn primary" id="c-save">Guardar cliente</button><button type="button" class="btn" id="c-cancel" hidden>Cancelar</button></div>
+        <p class="hint">Los clientes y las cotizaciones se guardan solo en este navegador.</p>
+      </form>
+    </div>
+    <div class="results"><div class="scroll"><table id="tcli"></table></div></div>
+  </section>
+
+  <section id="v-cotizaciones" hidden>
+    <div class="scroll"><table id="tcot"></table></div>
   </section>
 </div>
 
@@ -206,7 +246,13 @@ const V = [
 ].map(a=>({p:P.find(x=>x.id===a[0]),tipo:a[1],modelo:a[2],anio:a[3],placa:a[4],kg:a[5],l:a[6],a:a[7],h:a[8],tar:a[9],car:a[10],rampa:!!a[11],tarifa:a[12],activo:!!a[13],vol:a[6]*a[7]*a[8]}));
 
 const $=id=>document.getElementById(id);
-const nf=new Intl.NumberFormat("es",{maximumFractionDigits:1});
+const nf=new Intl.NumberFormat("en-US",{maximumFractionDigits:1});
+const m=x=>(x<0?"-":"")+"$"+Math.abs(x).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const load=(k,d)=>{try{const s=localStorage.getItem(k);return s?JSON.parse(s):d}catch(e){return d}};
+const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+const VISTAS=["buscar","flota","proveedores","clientes","cotizaciones"];
+let lastQ={peso:0,vol:0};
 const n=x=>nf.format(x);
 const val=id=>Math.max(0,parseFloat($(id).value)||0);
 
@@ -226,6 +272,7 @@ function evaluar(v,q){
 function buscar(){
   const q={peso:val("peso"),l:val("largo"),a:val("ancho"),h:val("alto"),tar:val("tarimas"),car:$("carro").value,zona:$("zona").value,rampa:$("rampa").checked};
   const vol=q.l*q.a*q.h;
+  lastQ={peso:q.peso,vol};
   const si=[],no=[];
   V.forEach(v=>{
     const r=evaluar(v,q);
@@ -250,7 +297,8 @@ function buscar(){
       </div>
       <div class="contact">
         <strong class="num">$${n(v.tarifa)} / día</strong>
-        ${v.p.n}<br><span class="muted">${v.p.c} · ${v.p.t}</span>
+        ${v.p.n}<br><span class="muted">${v.p.c} · ${v.p.t}</span><br>
+        <button type="button" class="btn primary" data-cot="${V.indexOf(v)}">Cotizar</button>
       </div>
     </article>`;
   });
@@ -282,8 +330,8 @@ function proveedores(){
       <dl class="kv"><dt>Contacto</dt><dd>${p.c}</dd><dt>Teléfono</dt><dd class="num">${p.t}</dd><dt>Cobertura</dt><dd>${p.z.join(", ")}</dd><dt>Pago</dt><dd>${p.pago}</dd><dt>Calificación</dt><dd class="num">${n(p.cal)} / 5</dd><dt>Flota</dt><dd class="num">${vs.length} vehículos, de ${n(Math.min(...vs.map(v=>v.kg)))} a ${n(Math.max(...vs.map(v=>v.kg)))} kg</dd></dl></article>`}).join("");
 }
 function ruta(){
-  const v=["buscar","flota","proveedores"].includes(location.hash.slice(1))?location.hash.slice(1):"buscar";
-  ["buscar","flota","proveedores"].forEach(k=>$("v-"+k).hidden=k!==v);
+  const v=VISTAS.includes(location.hash.slice(1))?location.hash.slice(1):"buscar";
+  VISTAS.forEach(k=>$("v-"+k).hidden=k!==v);
   document.querySelectorAll("#nav a").forEach(a=>a.getAttribute("href")==="#"+v?a.setAttribute("aria-current","page"):a.removeAttribute("aria-current"));
 }
 opciones($("ft"),[...new Set(V.map(v=>v.car))],"Todas las carrocerías");
@@ -292,7 +340,95 @@ $("f").addEventListener("input",buscar);
 $("f").addEventListener("submit",e=>e.preventDefault());
 $("ft").addEventListener("change",flota);$("fp").addEventListener("change",flota);
 addEventListener("hashchange",ruta);
-buscar();flota();proveedores();ruta();
+
+// ---- Clientes ----
+let C=load("tf_clientes",null)||[
+ {id:1,razon:"Distribuidora La Central, S.A. de C.V.",nit:"0614-150395-101-2",nrc:"84512-3",tel:"2200-0001",contacto:"Ana Portillo",credito:true,dias:30,ej:true},
+ {id:2,razon:"Ferretería El Progreso",nit:"0511-200688-102-5",nrc:"152340-1",tel:"2200-0002",contacto:"Luis Menjívar",credito:false,dias:0,ej:true},
+ {id:3,razon:"Agroindustrias del Pacífico, S.A. de C.V.",nit:"0614-051102-103-8",nrc:"201877-9",tel:"2200-0003",contacto:"Rebeca Cañas",credito:true,dias:15,ej:true}
+];
+let Q=load("tf_cotizaciones",[]);
+let editId=null;
+function clientes(){
+  $("tcli").innerHTML=`<thead><tr><th>Razón social</th><th>NIT</th><th>Registro</th><th>Teléfono</th><th>Contacto</th><th>Crédito</th><th></th></tr></thead><tbody>`+
+  (C.length?C.map(c=>`<tr><td><strong>${esc(c.razon)}</strong>${c.ej?' <span class="tag">Ejemplo</span>':""}</td><td class="num">${esc(c.nit)}</td><td class="num">${esc(c.nrc)}</td><td class="num">${esc(c.tel)}</td><td>${esc(c.contacto)}</td><td><span class="tag ${c.credito?"ok":""}">${c.credito?c.dias+" días":"Contado"}</span></td><td><button type="button" class="btn sm" data-ed="${c.id}">Editar</button> <button type="button" class="btn sm" data-del="${c.id}">Eliminar</button></td></tr>`).join("")
+  :`<tr><td colspan="7" class="muted">Aún no hay clientes. Usa el formulario para agregar el primero.</td></tr>`)+"</tbody>";
+}
+function limpiarCliente(){
+  $("fc").reset();editId=null;$("c-dias").disabled=true;
+  $("fct").textContent="Nuevo cliente";$("c-save").textContent="Guardar cliente";$("c-cancel").hidden=true;
+}
+$("c-credito").addEventListener("change",e=>{$("c-dias").disabled=!e.target.checked;if(!e.target.checked)$("c-dias").value=0});
+$("c-cancel").addEventListener("click",limpiarCliente);
+$("fc").addEventListener("submit",e=>{
+  e.preventDefault();
+  const razon=$("c-razon").value.trim(); if(!razon) return;
+  const cr=$("c-credito").checked;
+  const d={razon,nit:$("c-nit").value.trim(),nrc:$("c-nrc").value.trim(),tel:$("c-tel").value.trim(),contacto:$("c-contacto").value.trim(),credito:cr,dias:cr?Math.round(val("c-dias")):0};
+  if(editId!==null){const i=C.findIndex(c=>c.id===editId);if(i>=0)C[i]={id:editId,...d}}
+  else C.push({id:Date.now(),...d});
+  save("tf_clientes",C);limpiarCliente();clientes();
+});
+function dosPasos(b,fn){ // el primer clic pide confirmar, el segundo ejecuta
+  if(b.dataset.ok){fn();return}
+  b.dataset.ok="1";b.textContent="¿Eliminar?";b.classList.add("danger");
+}
+$("tcli").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  if(b.dataset.ed){
+    const c=C.find(x=>String(x.id)===b.dataset.ed); if(!c) return;
+    editId=c.id;$("c-razon").value=c.razon;$("c-nit").value=c.nit;$("c-nrc").value=c.nrc;$("c-tel").value=c.tel;$("c-contacto").value=c.contacto;
+    $("c-credito").checked=c.credito;$("c-dias").disabled=!c.credito;$("c-dias").value=c.dias;
+    $("fct").textContent="Editar cliente";$("c-save").textContent="Guardar cambios";$("c-cancel").hidden=false;$("c-razon").focus();
+  }
+  if(b.dataset.del) dosPasos(b,()=>{C=C.filter(x=>String(x.id)!==b.dataset.del);save("tf_clientes",C);if(String(editId)===b.dataset.del)limpiarCliente();clientes()});
+});
+
+// ---- Cotización ----
+let cotV=null;
+function abrirCot(i){
+  cotV=V[i];const v=cotV;
+  $("cot").hidden=false;
+  $("cot").innerHTML=`<div class="summary"><h2>Cotización</h2><button type="button" class="btn" id="cotx">Cerrar</button></div>
+    <div class="spec num">${v.tipo} · ${v.modelo} · ${v.p.n} · carga de ${n(lastQ.peso)} kg${lastQ.vol?` y ${n(lastQ.vol)} m³`:""}</div>
+    <div class="qgrid">
+      <label for="qcli">Cliente<select id="qcli">${C.length?C.map(c=>`<option value="${c.id}">${esc(c.razon)}</option>`).join(""):'<option value="">Agrega clientes en la pestaña Clientes</option>'}</select></label>
+      <label for="qcosto">Flete del proveedor ($)<input id="qcosto" type="number" min="0" step="0.01" value="${v.tarifa}"></label>
+      <label for="qmargen">Margen de ganancia (%)<input id="qmargen" type="number" step="0.5" value="${load("tf_margen",20)}"></label>
+      <label for="qprecio">Precio al cliente sin IVA ($)<input id="qprecio" type="number" min="0" step="0.01"></label>
+    </div>
+    <dl class="qtot" id="qtot"></dl>
+    <div class="actions"><button type="button" class="btn primary" id="qsave">Guardar cotización</button><span id="qmsg" class="muted" role="status"></span></div>`;
+  calc("margen");
+  $("cot").scrollIntoView({block:"nearest"});
+}
+function calc(origen){
+  const costo=val("qcosto");let mg=parseFloat($("qmargen").value)||0,precio=val("qprecio");
+  if(origen==="precio"){mg=costo?(precio/costo-1)*100:0;$("qmargen").value=Math.round(mg*100)/100}
+  else{precio=Math.max(0,costo*(1+mg/100));$("qprecio").value=precio.toFixed(2)}
+  const c=C.find(x=>String(x.id)===$("qcli").value);
+  const gan=precio-costo,iva=precio*.13;
+  $("qtot").innerHTML=`<div><dt>Ganancia</dt><dd class="num${gan<0?" neg":""}">${m(gan)}</dd></div><div><dt>IVA 13%</dt><dd class="num">${m(iva)}</dd></div><div><dt>Total con IVA</dt><dd class="num big">${m(precio+iva)}</dd></div><div><dt>Condición de pago</dt><dd>${c?(c.credito?`Crédito ${c.dias} días`:"Contado"):"—"}</dd></div>`;
+  return {costo,mg,precio,gan,iva,c};
+}
+function guardarCot(){
+  const r=calc("precio");
+  if(!r.c){$("qmsg").textContent="Primero agrega un cliente en la pestaña Clientes.";return}
+  Q.unshift({id:Date.now(),fecha:new Date().toISOString().slice(0,10),cliente:r.c.razon,pago:r.c.credito?`Crédito ${r.c.dias} días`:"Contado",veh:cotV.tipo+" · "+cotV.modelo,prov:cotV.p.n,carga:n(lastQ.peso)+" kg"+(lastQ.vol?" · "+n(lastQ.vol)+" m³":""),costo:r.costo,precio:r.precio});
+  save("tf_cotizaciones",Q);save("tf_margen",Math.round(r.mg*100)/100);cotizaciones();
+  $("qmsg").innerHTML='Cotización guardada. <a href="#cotizaciones">Ver cotizaciones</a>';
+}
+$("res").addEventListener("click",e=>{const b=e.target.closest("[data-cot]");if(b)abrirCot(+b.dataset.cot)});
+$("cot").addEventListener("input",e=>calc(e.target.id==="qprecio"?"precio":"margen"));
+$("cot").addEventListener("click",e=>{if(e.target.id==="cotx")$("cot").hidden=true;if(e.target.id==="qsave")guardarCot()});
+function cotizaciones(){
+  $("tcot").innerHTML=`<thead><tr><th>Fecha</th><th>Cliente</th><th>Vehículo</th><th>Carga</th><th class="r">Flete proveedor</th><th class="r">Margen</th><th class="r">Ganancia</th><th class="r">Precio sin IVA</th><th class="r">Total con IVA</th><th>Pago</th><th></th></tr></thead><tbody>`+
+  (Q.length?Q.map(q=>`<tr><td class="num">${q.fecha}</td><td><strong>${esc(q.cliente)}</strong></td><td>${esc(q.veh)}<br><span class="muted">${esc(q.prov)}</span></td><td class="num">${esc(q.carga)}</td><td class="r num">${m(q.costo)}</td><td class="r num">${q.costo?n((q.precio/q.costo-1)*100):0}%</td><td class="r num">${m(q.precio-q.costo)}</td><td class="r num">${m(q.precio)}</td><td class="r num"><strong>${m(q.precio*1.13)}</strong></td><td>${esc(q.pago)}</td><td><button type="button" class="btn sm" data-del="${q.id}">Eliminar</button></td></tr>`).join("")
+  :`<tr><td colspan="11" class="muted">Aún no hay cotizaciones. En la pestaña Buscar, elige un vehículo y pulsa Cotizar.</td></tr>`)+"</tbody>";
+}
+$("tcot").addEventListener("click",e=>{const b=e.target.closest("[data-del]");if(b)dosPasos(b,()=>{Q=Q.filter(x=>String(x.id)!==b.dataset.del);save("tf_cotizaciones",Q);cotizaciones()})});
+
+buscar();flota();proveedores();clientes();cotizaciones();ruta();
 </script>
 </body>
 </html>
