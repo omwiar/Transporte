@@ -3,8 +3,6 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-</head>
-<body>
 <title>Buscador de Flota</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
@@ -114,6 +112,8 @@ td.r,th.r{text-align:right}
 .actions{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
 input:disabled{opacity:.5}
 </style>
+</head>
+<body>
 
 <div class="wrap">
   <header class="top">
@@ -253,7 +253,9 @@ const load=(k,d)=>{try{const s=localStorage.getItem(k);return s?JSON.parse(s):d}
 const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
 const VISTAS=["buscar","flota","proveedores","clientes","cotizaciones"];
 let lastQ={peso:0,vol:0};
+let cotV=null,cotQ=null;   // vehículo y carga de la cotización abierta
 const n=x=>nf.format(x);
+const hoy=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};   // fecha local, no UTC
 const val=id=>Math.max(0,parseFloat($(id).value)||0);
 
 function evaluar(v,q){
@@ -273,6 +275,7 @@ function buscar(){
   const q={peso:val("peso"),l:val("largo"),a:val("ancho"),h:val("alto"),tar:val("tarimas"),car:$("carro").value,zona:$("zona").value,rampa:$("rampa").checked};
   const vol=q.l*q.a*q.h;
   lastQ={peso:q.peso,vol};
+  $("cot").hidden=true;cotV=null;cotQ=null;   // la búsqueda cambió: la cotización abierta ya no aplica
   const si=[],no=[];
   V.forEach(v=>{
     const r=evaluar(v,q);
@@ -307,12 +310,22 @@ function buscar(){
 }
 function barra(t,p){return `<div class="bar"><span>${t}</span><i><b style="width:${Math.min(100,p*100)}%"></b></i><span class="num">${Math.round(p*100)}%</span></div>`}
 function sugerir(q,vol){
-  // vehículo activo más grande donde la carga cabe por medidas; calcula cuántos viajes harían falta
+  // busca el vehículo activo donde la carga cabe por medidas y que necesite menos viajes
   const L=Math.max(q.l,q.a),A=Math.min(q.l,q.a);
-  const c=V.filter(v=>v.activo&&L<=v.l&&A<=v.a&&q.h<=v.h&&(!q.car||v.car===q.car||(q.car==="Cerrado"&&v.car==="Refrigerado"))).sort((x,y)=>y.kg-x.kg)[0];
-  if(!c) return "Revisa las medidas o quita filtros: no hay una caja donde quepa por tamaño.";
-  const k=Math.ceil(Math.max(q.peso/c.kg,vol/c.vol,1));
-  return k>1?`Dividiendo la carga, se podría mover en ${k} viajes (o ${k} unidades) tipo ${c.tipo} · ${c.modelo} de ${c.p.n}.`:"Prueba quitando el filtro de tipo de viaje o de rampa.";
+  const cabe=v=>v.activo&&L<=v.l&&A<=v.a&&q.h<=v.h&&(!q.tar||v.tar>0)&&(!q.car||v.car===q.car||(q.car==="Cerrado"&&v.car==="Refrigerado"));
+  const viajes=v=>Math.ceil(Math.max(q.peso/v.kg,vol/v.vol,q.tar?q.tar/v.tar:0,1));
+  const mejor=vs=>vs.map(v=>({v,k:viajes(v)})).sort((x,y)=>x.k-y.k||x.v.tarifa-y.v.tarifa)[0];
+  const txt=x=>x.k>1?`se podría mover en ${x.k} viajes (o ${x.k} unidades) tipo ${x.v.tipo} · ${x.v.modelo} de ${x.v.p.n}`:`cabe en un ${x.v.tipo} · ${x.v.modelo} de ${x.v.p.n}`;
+  const con=mejor(V.filter(v=>cabe(v)&&(!q.rampa||v.rampa)&&(!q.zona||v.p.z.includes(q.zona))));
+  if(con) return `Dividiendo la carga, ${txt(con)}.`;
+  const sin=mejor(V.filter(cabe));
+  if(sin){
+    const f=[q.rampa&&"rampa",q.zona&&"tipo de viaje"].filter(Boolean),dos=f.length>1;
+    return `Ningún vehículo que cumpla ${dos?"los filtros":"el filtro"} de ${f.join(" y ")} puede con ella. Quitando ${dos?"esos filtros":"ese filtro"}, ${txt(sin)}.`;
+  }
+  const t=q.tar?Math.max(...V.filter(v=>v.activo).map(v=>v.tar)):0;
+  if(q.tar>t) return `Ningún vehículo lleva ${q.tar} tarimas (el máximo es ${t}). Habría que dividir la carga por tarimas.`;
+  return "Revisa las medidas o el tipo de carrocería: no hay un vehículo activo donde quepa por tamaño.";
 }
 
 function opciones(sel,items,todos){sel.innerHTML=`<option value="">${todos}</option>`+items.map(x=>`<option>${x}</option>`).join("")}
@@ -367,7 +380,7 @@ $("fc").addEventListener("submit",e=>{
   const d={razon,nit:$("c-nit").value.trim(),nrc:$("c-nrc").value.trim(),tel:$("c-tel").value.trim(),contacto:$("c-contacto").value.trim(),credito:cr,dias:cr?Math.round(val("c-dias")):0};
   if(editId!==null){const i=C.findIndex(c=>c.id===editId);if(i>=0)C[i]={id:editId,...d}}
   else C.push({id:Date.now(),...d});
-  save("tf_clientes",C);limpiarCliente();clientes();
+  save("tf_clientes",C);limpiarCliente();clientes();refrescarCli();
 });
 function dosPasos(b,fn){ // el primer clic pide confirmar, el segundo ejecuta
   if(b.dataset.ok){fn();return}
@@ -381,18 +394,17 @@ $("tcli").addEventListener("click",e=>{
     $("c-credito").checked=c.credito;$("c-dias").disabled=!c.credito;$("c-dias").value=c.dias;
     $("fct").textContent="Editar cliente";$("c-save").textContent="Guardar cambios";$("c-cancel").hidden=false;$("c-razon").focus();
   }
-  if(b.dataset.del) dosPasos(b,()=>{C=C.filter(x=>String(x.id)!==b.dataset.del);save("tf_clientes",C);if(String(editId)===b.dataset.del)limpiarCliente();clientes()});
+  if(b.dataset.del) dosPasos(b,()=>{C=C.filter(x=>String(x.id)!==b.dataset.del);save("tf_clientes",C);if(String(editId)===b.dataset.del)limpiarCliente();clientes();refrescarCli()});
 });
 
 // ---- Cotización ----
-let cotV=null;
 function abrirCot(i){
-  cotV=V[i];const v=cotV;
+  cotV=V[i];cotQ={...lastQ};const v=cotV;
   $("cot").hidden=false;
   $("cot").innerHTML=`<div class="summary"><h2>Cotización</h2><button type="button" class="btn" id="cotx">Cerrar</button></div>
-    <div class="spec num">${v.tipo} · ${v.modelo} · ${v.p.n} · carga de ${n(lastQ.peso)} kg${lastQ.vol?` y ${n(lastQ.vol)} m³`:""}</div>
+    <div class="spec num">${v.tipo} · ${v.modelo} · ${v.p.n} · carga de ${n(cotQ.peso)} kg${cotQ.vol?` y ${n(cotQ.vol)} m³`:""}</div>
     <div class="qgrid">
-      <label for="qcli">Cliente<select id="qcli">${C.length?C.map(c=>`<option value="${c.id}">${esc(c.razon)}</option>`).join(""):'<option value="">Agrega clientes en la pestaña Clientes</option>'}</select></label>
+      <label for="qcli">Cliente<select id="qcli">${opcionesCli()}</select></label>
       <label for="qcosto">Flete del proveedor ($)<input id="qcosto" type="number" min="0" step="0.01" value="${v.tarifa}"></label>
       <label for="qmargen">Margen de ganancia (%)<input id="qmargen" type="number" step="0.5" value="${load("tf_margen",20)}"></label>
       <label for="qprecio">Precio al cliente sin IVA ($)<input id="qprecio" type="number" min="0" step="0.01"></label>
@@ -405,21 +417,29 @@ function abrirCot(i){
 function calc(origen){
   const costo=val("qcosto");let mg=parseFloat($("qmargen").value)||0,precio=val("qprecio");
   if(origen==="precio"){mg=costo?(precio/costo-1)*100:0;$("qmargen").value=Math.round(mg*100)/100}
-  else{precio=Math.max(0,costo*(1+mg/100));$("qprecio").value=precio.toFixed(2)}
+  else if(origen==="margen"){precio=Math.max(0,costo*(1+mg/100));$("qprecio").value=precio.toFixed(2)}
   const c=C.find(x=>String(x.id)===$("qcli").value);
   const gan=precio-costo,iva=precio*.13;
   $("qtot").innerHTML=`<div><dt>Ganancia</dt><dd class="num${gan<0?" neg":""}">${m(gan)}</dd></div><div><dt>IVA 13%</dt><dd class="num">${m(iva)}</dd></div><div><dt>Total con IVA</dt><dd class="num big">${m(precio+iva)}</dd></div><div><dt>Condición de pago</dt><dd>${c?(c.credito?`Crédito ${c.dias} días`:"Contado"):"—"}</dd></div>`;
   return {costo,mg,precio,gan,iva,c};
 }
 function guardarCot(){
+  if(!cotV) return;
   const r=calc("precio");
   if(!r.c){$("qmsg").textContent="Primero agrega un cliente en la pestaña Clientes.";return}
-  Q.unshift({id:Date.now(),fecha:new Date().toISOString().slice(0,10),cliente:r.c.razon,pago:r.c.credito?`Crédito ${r.c.dias} días`:"Contado",veh:cotV.tipo+" · "+cotV.modelo,prov:cotV.p.n,carga:n(lastQ.peso)+" kg"+(lastQ.vol?" · "+n(lastQ.vol)+" m³":""),costo:r.costo,precio:r.precio});
+  Q.unshift({id:Date.now(),fecha:hoy(),cliente:r.c.razon,pago:r.c.credito?`Crédito ${r.c.dias} días`:"Contado",veh:cotV.tipo+" · "+cotV.modelo,prov:cotV.p.n,carga:n(cotQ.peso)+" kg"+(cotQ.vol?" · "+n(cotQ.vol)+" m³":""),costo:r.costo,precio:r.precio});
   save("tf_cotizaciones",Q);save("tf_margen",Math.round(r.mg*100)/100);cotizaciones();
   $("qmsg").innerHTML='Cotización guardada. <a href="#cotizaciones">Ver cotizaciones</a>';
 }
 $("res").addEventListener("click",e=>{const b=e.target.closest("[data-cot]");if(b)abrirCot(+b.dataset.cot)});
-$("cot").addEventListener("input",e=>calc(e.target.id==="qprecio"?"precio":"margen"));
+$("cot").addEventListener("input",e=>calc(e.target.id==="qprecio"?"precio":e.target.id==="qcli"?"cliente":"margen"));
+function opcionesCli(){return C.length?C.map(c=>`<option value="${c.id}">${esc(c.razon)}</option>`).join(""):'<option value="">Agrega clientes en la pestaña Clientes</option>'}
+function refrescarCli(){ // mantiene al día el selector de la cotización abierta cuando cambian los clientes
+  const s=$("qcli"); if(!s) return;
+  const antes=s.value; s.innerHTML=opcionesCli();
+  if(C.some(c=>String(c.id)===antes)) s.value=antes;
+  calc("cliente");
+}
 $("cot").addEventListener("click",e=>{if(e.target.id==="cotx")$("cot").hidden=true;if(e.target.id==="qsave")guardarCot()});
 function cotizaciones(){
   $("tcot").innerHTML=`<thead><tr><th>Fecha</th><th>Cliente</th><th>Vehículo</th><th>Carga</th><th class="r">Flete proveedor</th><th class="r">Margen</th><th class="r">Ganancia</th><th class="r">Precio sin IVA</th><th class="r">Total con IVA</th><th>Pago</th><th></th></tr></thead><tbody>`+
